@@ -1,0 +1,13 @@
+name: NomiPetExtras
+version: 1.0.0
+main: team.nomi.pet.NomiPetExtras
+api-version: '1.21'
+folia-supported: true
+depend: [MyPet, Vault]
+commands:
+  nomipetreset:
+    description: Reset your current pet skill route; console shows read-only status
+    permission: nomipetextras.reset
+permissions:
+  nomipetextras.reset:
+    default: true

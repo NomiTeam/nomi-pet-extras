@@ -1,0 +1,59 @@
+{
+  "title": "<bold><gradient:#9B529E:#C781B2>确认重置技能树</gradient></bold>",
+  "rows": 3,
+  "esc-supports-back": true,
+  "sections": {
+    "border": {
+      "type": "border",
+      "item": {
+        "material": "GRAY_STAINED_GLASS_PANE",
+        "title": " "
+      }
+    },
+    "info": {
+      "type": "slot",
+      "position": {
+        "col": 4,
+        "row": 1
+      },
+      "item": {
+        "material": "EXPERIENCE_BOTTLE",
+        "title": "<!italic><light_purple>重置基础路线",
+        "lore": [
+          "<!italic><gray>原路线：<previous_name>",
+          "<!italic><aqua>新路线：<target_name>",
+          "<!italic><gold>费用：<reset_price>",
+          "<!italic><gray>保留等级经验；背包必须清空"
+        ]
+      }
+    },
+    "confirm": {
+      "type": "slot",
+      "position": {
+        "col": 2,
+        "row": 1
+      },
+      "item": {
+        "material": "LIME_DYE",
+        "title": "<!italic><green><bold>确认重置",
+        "lore": [
+          "<!italic><yellow>确认后扣费并应用路线"
+        ]
+      }
+    },
+    "cancel": {
+      "type": "slot",
+      "position": {
+        "col": 4,
+        "row": 2
+      },
+      "item": {
+        "material": "FLOW_BANNER_PATTERN",
+        "title": "<!italic><#FFBBD0><bold>↩ 返回上层",
+        "lore": [
+          "<!italic><#FFF4B4>退出当前菜单。"
+        ]
+      }
+    }
+  }
+}
