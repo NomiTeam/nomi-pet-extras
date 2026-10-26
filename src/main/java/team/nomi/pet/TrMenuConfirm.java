@@ -23,8 +23,6 @@ final class TrMenuConfirm {
 
         private Object receptacle;
 
-        private volatile boolean closed;
-
         Window(Object session, Object menu, Player viewer, ClassLoader loader, String prefix) throws ReflectiveOperationException {
             this.session = session;
             this.menu = menu;
@@ -36,7 +34,7 @@ final class TrMenuConfirm {
 
         boolean rendering() {
             try {
-                return !closed && sessions.get(viewer.getUniqueId()) == session && read(session, "getViewer") == viewer && id.equals(read(session, "getId")) && read(session, "getMenu") == menu;
+                return sessions.get(viewer.getUniqueId()) == session && read(session, "getViewer") == viewer && id.equals(read(session, "getId")) && read(session, "getMenu") == menu;
             } catch (ReflectiveOperationException | RuntimeException | LinkageError error) {
                 return false;
             }
@@ -50,40 +48,9 @@ final class TrMenuConfirm {
             }
         }
 
-        boolean opened(Runnable close) throws ReflectiveOperationException {
+        boolean opened() throws ReflectiveOperationException {
             receptacle = read(session, "getReceptacle");
-            if (!current()) {
-                return false;
-            }
-            // Natural packet closes do not emit Bukkit InventoryCloseEvent (or MenuCloseEvent).
-            // Session.close / MenuCloseEvent also reach this callback. Preserve TrMenu's own cleanup.
-            Object original = read(receptacle, "getOnClose");
-            Method setter = java.util.Arrays.stream(receptacle.getClass().getMethods()).filter(m -> m.getName().equals("setOnClose") && m.getParameterCount() == 1).findFirst().orElseThrow();
-            Class<?> function = setter.getParameterTypes()[0];
-            Method invoke = java.util.Arrays.stream(function.getMethods()).filter(m -> m.getName().equals("invoke") && m.getParameterCount() == 2).findFirst().orElseThrow();
-            setter.invoke(receptacle, Proxy.newProxyInstance(function.getClassLoader(), new Class<?>[] { function }, (p, m, a) -> {
-                if (m.getName().equals("invoke")) {
-                    closed = true;
-                    // removes only the captured flow; an old window cannot cancel a new selection
-                    close.run();
-                    // delayed old close must not shut a reused session
-                    if (read(session, "getReceptacle") != receptacle) {
-                        return null;
-                    }
-                    try {
-                        return invoke.invoke(original, a);
-                    } catch (InvocationTargetException e) {
-                        throw e.getCause();
-                    }
-                }
-                if (m.getName().equals("toString")) {
-                    return "PetResetConfirm close";
-                }
-                if (m.getName().equals("hashCode")) {
-                    return System.identityHashCode(p);
-                }
-                return p == a[0];
-            }));
+            // 只读取原生会话身份；不替换 onClose，关闭及其尾部清理由 TrMenu 完成。
             return current();
         }
     }
@@ -92,7 +59,7 @@ final class TrMenuConfirm {
         return object.getClass().getMethod(method).invoke(object);
     }
 
-    static boolean open(JavaPlugin plugin, Player player, Consumer<Window> bind, Runnable close) throws ReflectiveOperationException {
+    static boolean open(JavaPlugin plugin, Player player, Consumer<Window> bind) throws ReflectiveOperationException {
         var trmenu = plugin.getServer().getPluginManager().getPlugin("TrMenu");
         if (trmenu == null || !trmenu.isEnabled()) {
             return false;
@@ -107,11 +74,11 @@ final class TrMenuConfirm {
             api = Class.forName(prefix + ".api.TrMenuAPI", true, loader);
         }
         Object menu = api.getMethod("getMenuById", String.class).invoke(api.getField("INSTANCE").get(null), "PetResetConfirm");
-        return menu != null && open(menu, player, bind, close, prefix);
+        return menu != null && open(menu, player, bind, prefix);
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    static boolean open(Object menu, Player player, Consumer<Window> bind, Runnable close, String prefix) throws ReflectiveOperationException {
+    static boolean open(Object menu, Player player, Consumer<Window> bind, String prefix) throws ReflectiveOperationException {
         ClassLoader loader = menu.getClass().getClassLoader();
         Class<? extends Enum> reason = (Class<? extends Enum>) Class.forName(prefix + ".api.event.MenuOpenEvent$Reason", true, loader);
         Window[] opened = { null };
@@ -127,6 +94,6 @@ final class TrMenuConfirm {
             }
         });
         // The Consumer runs before open conditions/rendering. A cancelled/reentrant opening must fail closed.
-        return opened[0] != null && opened[0].opened(close);
+        return opened[0] != null && opened[0].opened();
     }
 }

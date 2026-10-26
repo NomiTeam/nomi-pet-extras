@@ -308,7 +308,7 @@ final class PetMenus implements Listener, CommandExecutor {
                 if (owned(player) && live(f)) {
                     f.confirmation = window;
                 }
-            }, () -> discard(f));
+            });
             if (!opened || !live(f) || f.confirmation == null
                     || !f.confirmation.current() || !f.state.confirm(f.confirmation)) {
                 discard(f);

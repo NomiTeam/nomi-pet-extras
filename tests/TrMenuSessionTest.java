@@ -26,7 +26,7 @@ public class TrMenuSessionTest {
             var state = SelectionTest.selected(c);
             state.handoff(new Object(), org.bukkit.event.inventory.InventoryType.CRAFTING);
             Menu menu = new Menu();
-            int[] opens = { 0 }, closes = { 0 };
+            int[] opens = { 0 };
             TrMenuConfirm.Window[] w = { null };
             menu.bukkitOpen = () -> {
                 if (bukkit) {
@@ -39,7 +39,7 @@ public class TrMenuSessionTest {
                 check(x.rendering(), "callback session bound");
                 check(!x.current(), "callback precedes window");
                 check(!state.prepare(), "render cannot prepare");
-            }, () -> closes[0]++, "trplugins.menu"), "open");
+            }, "trplugins.menu"), "open");
             check(opens[0] == (bukkit ? 1 : 0), "packet has no InventoryOpenEvent");
             check(w[0].current() && state.confirm(w[0]) && state.visible(w[0]) && state.prepare(), "prepare live window");
             MenuSession session = MenuSession.SESSIONS.get(id);
@@ -62,37 +62,31 @@ public class TrMenuSessionTest {
             menu.bukkitOpen = () -> {
             };
             old.close(p);
-            check(!w[0].current() && closes[0] == 1 && session.menu == null, "close callback plus native cleanup");
-            check(TrMenuConfirm.open(menu, p, x -> w[0] = x, () -> closes[0] += 10, "trplugins.menu"), "new flow");
+            check(!w[0].current() && session.menu == null, "close callback plus native cleanup");
+            check(TrMenuConfirm.open(menu, p, x -> w[0] = x, "trplugins.menu"), "new flow");
             old.getOnClose().invoke(p, old);
-            check(closes[0] == 2, "old callback only old captured request");
-            check(w[0].current(), "stale close preserves new session and request");
-            MenuSession.SESSIONS.get(id).receptacle.close(p);
+            check(!w[0].current(), "native stale callback invalidates session; no custom suppression");
+
             menu.cancelled = true;
             check(!TrMenuConfirm.open(menu, p, x -> {
                 throw new AssertionError("cancel callback");
-            }, () -> {
             }, "trplugins.menu"), "open cancellation");
             menu.cancelled = false;
             menu.condition = false;
             check(!TrMenuConfirm.open(menu, p, x -> {
-            }, () -> {
             }, "trplugins.menu"), "open condition rejects after callback");
             menu.condition = true;
             menu.conditionHook = s -> {
                 s.menu = new Menu();
             };
             check(!TrMenuConfirm.open(menu, p, x -> {
-            }, () -> {
             }, "trplugins.menu"), "condition switches menu");
             menu.conditionHook = s -> {
             };
             check(TrMenuConfirm.open(menu, p, x -> {
-            }, () -> {
             }, "trplugins.menu"), "next session");
             check(!TrMenuConfirm.open(menu, p, x -> {
                 throw new AssertionError("same menu callback");
-            }, () -> {
             }, "trplugins.menu"), "same-menu page must not reuse old request");
         }
         System.out.println("TrMenu 3.12.5 session model: packet/static callback ordering, cancellation, conditions, window/session identity and stale closes passed");

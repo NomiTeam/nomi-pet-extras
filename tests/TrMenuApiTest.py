@@ -51,6 +51,17 @@ assert opened.index("setViewingReceptacle:") < opened.index("Function2.invoke:")
 assert "getOnClose()" in window
 assert "setOnClose(kotlin210.jvm.functions.Function2" in window
 
+# 完整 close 的尾部不属于 onClose；跳过回调不能跳过按 UUID 删除。
+closed = window[window.index("public void close(boolean)"):window.index("public void title(")]
+assert closed.index("Function2.invoke:") < closed.index("setViewingReceptacle:")
+assert closed.index("setViewingReceptacle:") < closed.rindex("Field viewer:")
+api = inspect("api.receptacle.ReceptacleAPIKt", "-p", "-c")
+setter = api[api.index("public static final void setViewingReceptacle("):]
+assert "java/util/HashMap.remove:" in setter
+assert "setViewer(" not in window and "getViewer(" not in window
+listener = inspect("api.receptacle.vanilla.window.WindowListener", "-p", "-c")
+assert "WindowReceptacle.close:(Z)V" in listener
+
 # 安装版 JS 共享绑定存在已知串绑风险；JEXL 每次复制 Map 后才放入玩家。
 jexl = inspect("module.internal.script.jexl.JexlAgent", "-p", "-c")
 evaluation = jexl[jexl.index("public final java.lang.Object eval-"):]

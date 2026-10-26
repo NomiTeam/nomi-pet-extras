@@ -18,6 +18,8 @@ TEST_SUITES = [
     "ThreadTest",
     "BridgeSafetyTest",
     "TrMenuSessionTest",
+    "TrMenuCloseLifecycleTest",
+    "NativeLifecycleOwnershipTest",
     "NativeMenusTest",
 ]
 

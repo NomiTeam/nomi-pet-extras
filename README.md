@@ -31,7 +31,7 @@ public String getTargetName(org.bukkit.entity.Player p)
 
 `getTargetName` 只读返回当前有效确认目标的展示名，无有效目标时返回空字符串。目标名称在 TrMenu 渲染打开期间也可只读展示；确认打开完成后才可准备。不要在 TrMenu 的预打开脚本中执行 prepare/付款。脚本回调仅针对当前可见会话同步调用，不能缓存 Player 后为旧会话延迟调用这些接口。`cancel` 清理该玩家当前选择。错实体线程的 prepare/apply 分别返回 false/REJECTED，cancel 无副作用，名称返回空字符串。
 
-每位玩家至多一个短期选择，60 秒后不可用，并在 1200 tick 超时回调中清理。取消、换菜单、退出及新的选择会废弃旧状态；合法的原生选择关闭与生存/创造默认背包的一 tick 衔接被单独允许。原生选择绑定 Bukkit 库存身份；TrMenu 确认通过 `Menu.open` 的 `Consumer<MenuSession>` 绑定真实 session id/menu/viewer，再核对本次 receptacle 与 `getViewingReceptacle`。默认 packet 模式无需 `InventoryOpenEvent`，static 模式也使用同一会话检查；不修改 TrMenu 全局设置。自然 packet 关闭走 receptacle `onClose`（未必触发 `MenuCloseEvent`），适配器在该回调中先废弃本次请求，再保留 TrMenu 原生清理；旧窗口回调只清理其捕获的 flow，不能关闭后来复用同一 session 的请求。旧选择的延迟回调和完成清理不能删除后来建立的选择。prepare/apply 之间换宠物、原路线、权限或背包变化都会拒绝。进入 MyPet 前移除选择，防止同步事件重入重复执行。
+每位玩家至多一个短期选择，60 秒后不可用，并在 1200 tick 超时回调中清理。取消、换菜单、退出及新的选择会废弃旧状态；合法的原生选择关闭与生存/创造默认背包的一 tick 衔接被单独允许。原生选择绑定 Bukkit 库存身份；TrMenu 确认通过 `Menu.open` 的 `Consumer<MenuSession>` 绑定真实 session id/menu/viewer，再核对本次 receptacle 与 `getViewingReceptacle`。默认 packet 模式无需 `InventoryOpenEvent`，static 模式也使用同一会话检查；不修改 TrMenu 全局设置。自然 packet 关闭走原生 receptacle `onClose`（未必触发 `MenuCloseEvent`）。本插件不读取、替换或包装该回调，关闭后通过原生 session/receptacle/viewing 身份检查拒绝名称展示、prepare 和 apply；未再次访问的选择由既有超时回收。TrMenu 3.12.5 的迟到旧 close 仍可能清掉新 session 或 viewing，因此新窗口也会失效；本插件不承诺该场景保持窗口可用，不自动重开，不通过延时推断关闭完成。完整旧 close 返回后重新选择可走正常原生流程。旧选择的延迟回调和完成清理不能删除后来建立的选择。prepare/apply 之间换宠物、原路线、权限或背包变化都会拒绝。进入 MyPet 前移除选择，防止同步事件重入重复执行。
 
 从 1.0.0 迁移时，由安装维护者移除旧 `reset-cost` 配置和 `nuomi-reset-confirm` 资源覆盖，创建 TrMenu `PetResetConfirm` 菜单及其付款脚本。不要再注册本插件旧 MyPet 确认菜单，也不要让两个插件接管 `nuomi-reset`。安装变更通过正常服务端生命周期完成。
 
@@ -47,4 +47,6 @@ python3 build.py --deps-dir /path/to/dependencies
 
 本项目未包含第三方源码或二进制。MyPet、Purpur、TrMenu 及其他依赖的版权与许可归各自权利人；本仓库不为第三方授予许可证。
 
-确认菜单使用 TrMenu 每次调用复制上下文的 JEXL，避开安装版 JS 共享玩家绑定；不在 Open/Close 事件付款或调用按玩家清理的 cancel，旧窗口关闭由捕获 flow 的桥回调处理。插件仍需与确认菜单一起安装，不能仅卸载插件后留下按钮。未部署、未测真人。
+确认菜单使用 TrMenu 每次调用复制上下文的 JEXL，避开安装版 JS 共享玩家绑定；不在 Open/Close 事件付款或调用按玩家清理的 cancel，窗口关闭完全交给 TrMenu 原生生命周期；失效会话不能继续执行业务。插件仍需与确认菜单一起安装，不能仅卸载插件后留下按钮。未部署、未测真人。
+
+确认窗口关闭由 TrMenu 原生生命周期处理，失效会话拒绝执行业务。迟到的旧 close 不保证新窗口仍可用；完整旧 close 返回后，需重新选择。`PetResetConfirm` 菜单及付款脚本由部署者提供，实际价格须由部署者核实，不随本插件打包。离线测试与证据不代表真实玩家体验或实际扣费已验收。

@@ -25,6 +25,10 @@ public final class Menu {
 
     public static final class Window {
 
+        public Player viewer;
+
+        public Function2 nativeClose;
+
         private Function2 onClose = (p, r) -> null;
 
         public Function2 getOnClose() {
@@ -36,7 +40,13 @@ public final class Menu {
         }
 
         public void close(Player p) {
-            onClose.invoke(p, this);
+            // 真实 close(false) 在回调返回后无条件清 viewing，最后才清 viewer。
+            // 参数只为兼容既有测试；不能用调用者传入的玩家代替对象持有的 viewer。
+            if (viewer != null) {
+                onClose.invoke(viewer, this);
+                ReceptacleAPIKt.viewing.remove(viewer.getUniqueId());
+                viewer = null;
+            }
         }
     }
 
@@ -63,12 +73,13 @@ public final class Menu {
         }
         Window w = new Window();
         s.receptacle = w;
-        w.setOnClose((player, r) -> {
+        w.viewer = p;
+        w.nativeClose = (player, r) -> {
             s.menu = null;
             s.receptacle = null;
-            ReceptacleAPIKt.viewing.remove(p.getUniqueId());
             return null;
-        });
+        };
+        w.setOnClose(w.nativeClose);
         bukkitOpen.run();
         ReceptacleAPIKt.viewing.put(p.getUniqueId(), w);
     }

@@ -170,6 +170,7 @@ public class BridgeSafetyTest extends MyPetApi {
                 "apply-backpack",
                 "apply-backpack-open",
                 "old-close-new-flow",
+                "old-close-prepared",
                 "window-switch",
                 "session-switch",
                 "expired-prepare",
@@ -273,13 +274,18 @@ public class BridgeSafetyTest extends MyPetApi {
         long[] now = { 0 };
         field(PetMenus.Flow.class, flow, "state", new ResetSelection(() -> now[0]));
         openFlow(flow, flows, player);
-        if (mode.equals("old-close-new-flow")) {
+        trplugins.menu.module.display.Menu.Window captured = null;
+        if (mode.equals("old-close-new-flow") || mode.equals("old-close-prepared")) {
             var oldWindow = trplugins.menu.module.display.MenuSession.SESSIONS.get(id).receptacle;
             var replacement = new PetMenus.Flow(player, pet);
             replacement.target = target;
             openFlow(replacement, flows, player);
-            oldWindow.close(player);
-            check(flows.get(id) == replacement && replacement.confirmation.current(), "old close must preserve new flow/window");
+            captured = oldWindow;
+            if (mode.equals("old-close-new-flow")) {
+                oldWindow.close(player);
+            }
+            check(flows.get(id) == replacement && (mode.equals("old-close-prepared") || !replacement.confirmation.current()),
+                    "native late close invalidates replacement; business must reject");
         }
         switch (mode) {
             case "owner" -> ownerPlayer[0] = null;
@@ -315,7 +321,7 @@ public class BridgeSafetyTest extends MyPetApi {
                 "backpack-air",
                 "apply-backpack",
                 "apply-backpack-open",
-                "old-close-new-flow",
+                "old-close-prepared",
                 "expired-apply").contains(mode);
         check(plugin.prepare(player) == normal, mode + " prepare");
         check(applied[0] == 0, "prepare mutated pet");
@@ -345,7 +351,11 @@ public class BridgeSafetyTest extends MyPetApi {
         if (mode.equals("apply-backpack-open")) {
             skills.backpack.setMenuOpen(true);
         }
-        boolean success = Set.of("normal", "once", "reentry", "requirement-prepare", "backpack-empty", "backpack-air", "old-close-new-flow").contains(mode);
+        if (mode.equals("old-close-prepared")) {
+            captured.close(player);
+            check(plugin.getTargetName(player).isEmpty(), "closed replacement has no actionable target");
+        }
+        boolean success = Set.of("normal", "once", "reentry", "requirement-prepare", "backpack-empty", "backpack-air").contains(mode);
         check(plugin.apply(player).equals(success ? "SUCCESS" : "REJECTED"), mode + " apply");
         check(applied[0] == (success ? 1 : 0), mode + " mutation count");
         check(plugin.apply(player).equals("REJECTED"), mode + " repeated apply");
@@ -358,7 +368,7 @@ public class BridgeSafetyTest extends MyPetApi {
         flow.state.close(chooser);
         flow.state.handoff(new Object(), InventoryType.CRAFTING);
         flows.put(player.getUniqueId(), flow);
-        check(TrMenuConfirm.open(new trplugins.menu.module.display.Menu(), player, w -> flow.confirmation = w, () -> flows.remove(flow.playerId, flow), "trplugins.menu"), "packet open");
+        check(TrMenuConfirm.open(new trplugins.menu.module.display.Menu(), player, w -> flow.confirmation = w, "trplugins.menu"), "packet open");
         flow.state.confirm(flow.confirmation);
     }
 }
