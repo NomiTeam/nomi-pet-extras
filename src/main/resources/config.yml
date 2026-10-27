@@ -1,2 +1,0 @@
-# Invalid or negative values fall back to 500.
-reset-cost: 500.0

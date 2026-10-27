@@ -1,28 +1,52 @@
 # NomiPetExtras
 
-NomiPetExtras 1.0.0 独立提供 MyPet 基础技能路线重置，不依赖 MenuReturnBridge。只处理本人当前宠物；使用 MyPet 4.0.4 原生路线选择菜单、确认菜单 API 和技能重算事件，不执行等级修改命令。
+NomiPetExtras 1.1.0 负责 MyPet 4.0.4 的本人当前宠物基础路线选择与执行校验。使用原生路线选择 GUI 和 `setSkilltree(target, PLAYER_COMMAND)`，由 MyPet 的技能事件按当前等级重新计算技能，保留等级和经验。
 
-必须安装 MyPet 4.0.4、Vault（包括使用 Vault 插件名的 VaultUnlocked）及经济服务提供者。缺少硬依赖时由插件加载器停止加载；没有经济提供者或 API 不兼容时明确停用。依赖 Purpur 26.3 的 Paper/Folia API；玩家变更与延迟菜单操作均在玩家实体调度器上执行。
+依赖 MyPet 4.0.4、TrMenu，以及提供 Paper 实体调度与 `Server.isOwnedByCurrentRegion(Entity)` 的服务端。构建目标为 Purpur 26.3 build 2654 stable，Java 21 字节码。本插件不依赖 Vault，没有价格配置、支付、退款、交易日志或自有确认菜单。
 
-`/nomipetreset` 为本人当前宠物选择另一条基础路线。权限 `nomipetextras.reset` 默认允许；同时要求 `MyPet.command.chooseskilltree`，并重新检查路线自己的原生条件与权限。控制台执行此命令只显示只读状态。
+`/nomipetreset` 只打开本人当前宠物的原生路线选择。要求 `nomipetextras.reset` 和 `MyPet.command.chooseskilltree`，无免费执行重置的命令。保留原生 `skilltrees` section 的选择逻辑。在 MyPet 主菜单的 `PetMenuContext` 中保留槽类型 section `nuomi-reset`；本插件接管该按钮，并显示“费用见确认菜单”。MenuReturnBridge 应继续忽略此按钮；本仓库不修改 Bridge 或 VIP。
 
-`config.yml` 的 `reset-cost` 默认 500，非有限数或负值回退为 500。确认菜单锁定当次价格。扣费仅由本插件执行，每次确认终结后不能重试扣费，需重新选择。当前宠物、原路线、目标注册、等级、类型、继承条件、权限、背包和当前菜单 holder 均会再次检查。背包检查读取全部持久化槽，而非仅当前容量。
+选择后，原生 MyPet GUI 先关闭，本插件在下一 tick 通过 TrMenu 公共 API 打开 `PetResetConfirm`。适配 `me.arasple.mc.trmenu` 与 `trplugins.menu` 两命名空间的 `TrMenuAPI.INSTANCE.getMenuById` 及 `open(Player, Integer, MenuOpenEvent.Reason, Consumer)`。API 不兼容、菜单缺失、打开取消或出现其他菜单时清理选择；不回退执行命令。已只读核对真实 TrMenu 3.12.5 JAR 的签名和字节码打开顺序；完整运行时与实际网络窗口仍需服务端验收。
 
-取消只返回原生父菜单；父栈为空时重新显示路线选择。取消、旧菜单、切换菜单和玩家退出使旧确认失效。付款成功后会再次核对同一流程、同一确认 holder、有效 ticket、在线状态及宠物条件。仅在尚未调用 MyPet 修改接口、确认未应用时自动退款。MyPet 修改接口一旦进入，返回 false、抛异常或路线/等级/经验后置检查失败均视为应用结果不明，不自动退款、不尝试覆盖其他插件的合法变更；需管理员核对路线、等级经验、技能状态和经济账目。旧确认仅清理自己的流程，不关闭重入建立的新菜单。退款失败、应用结果不明或支付结果不明均会记录 SEVERE 日志，含交易号、玩家 UUID、宠物 UUID、金额及路线，玩家会获得对应交易号。只有经济接口确认退款成功才提示已退款。此日志需由管理员保留用于核查；该流程不是跨服务 ACID：没有持久化交易日志或自动恢复协议，进程崩溃、服务超时、第三方同步事件及技能重算的跨插件边界仍需人工核对；支付接口抛异常时不会盲目退款。MyPet 返回成功且路线/等级/经验符合预期只证明这些可观测条件，不能独立证明第三方技能监听器完整执行。
+TrMenu 脚本从 Bukkit 插件管理器取得名称为 `NomiPetExtras` 的实例，在玩家实体线程同步调用以下公开实例方法：
 
-使用 Python 3 和 PATH 中的 JDK 25。外部依赖目录包含 Purpur 26.3 build 2654 stable API、MyPet 4.0.4、Vault API JAR 及相应 Adventure、Guava、注解库。
-
-```sh
-python3 build.py --deps-dir .work/deps
-# 也可通过 NOMI_DEPS_DIR 指定依赖目录
+```java
+public boolean prepare(org.bukkit.entity.Player p)
+public String apply(org.bukkit.entity.Player p)
+public void cancel(org.bukkit.entity.Player p)
+public String getTargetName(org.bukkit.entity.Player p)
 ```
 
-构建使用真实外部 JAR，执行支付/退款/安全条件/旧菜单、付款重入取消/新流程、应用副作用不明的生产状态机回归，以及真实 MyPet Skilltree 对象测试，输出 `build/NomiPetExtras-1.0.0.jar`。第三方 JAR 不会打入产物或公开源码。测试与源码可公开复现。
+`prepare` 复核当前选择、本人当前宠物、原路线、权限、目标注册身份、基础路线等级/类型/继承限制（原生条件回调后再次复核）、原生条件，以及宠物背包未打开且全部持久槽为空。原生 NoSkilltree 条件使用只屏蔽当前路线的只读 Pet 视图。成功只建立一次执行准备，不扣款、不修改宠物；重复准备返回 false。
 
-安装维护者需迁移 MyPet 菜单配置：在原生宠物主菜单 `PetMenuContext` 中保留一个槽类型 section，ID 为 `nuomi-reset`，配置其位置与图标；本插件在打开时显示实际价格并接管此按钮。无需为按钮再配置扣费或重置指令。本插件自行注册唯一的 `nuomi-reset-confirm` 菜单并附带确认资源。保留 MyPet 选择路线菜单的原生 `skilltrees` section；不要覆盖其选择逻辑。Bridge 的其他 `nuomi-*` 导航按钮可继续存在。
+`apply` 消耗一次准备并重新校验，严格返回：
 
-必须先移除仍包含 MyPetReset/ResetCharge 的旧 Bridge 实现，清理旧 Bridge 的 `mypet-skill-reset-cost` 配置及旧确认资源覆盖，将价格迁至本插件 `reset-cost`。检查 MyPet 的同名确认菜单 JSON 覆盖，避免其遮盖本插件资源；同一 MenuId 只能有一个注册者。这些配置清理由安装维护者操作，本项目构建不会修改其他插件配置。
+| 返回值 | 含义 | 菜单处理 |
+| --- | --- | --- |
+| `SUCCESS` | MyPet 返回成功，且观察到目标路线和原等级经验 | 显示完成 |
+| `REJECTED` | 确定没有调用 MyPet 修改接口 | 若菜单已明确扣款，可由脚本退款 |
+| `UNCERTAIN` | 已调用 MyPet，返回 false、异常或后置条件不能证明成功 | 不自动退款或回滚，由维护者核查 |
 
-已验证真实依赖编译和进程内 Java 逻辑；尚未进行游戏内路线选择/确认/取消、实际经济服务、原生技能升级与多玩家 Folia 体验验证。Folia 声明仅表示实现采用对应调度 API，支持范围以此验证记录为限。不建议热重载：MyPet GUI API 没有公开的 unregisterMenu 接口，应通过正常服务器生命周期安装或卸载。
+所有价格、余额判断、扣款及明确未应用时的退款均由 TrMenu 脚本负责。建议单次点击同步执行：`prepare(p)` 成功 → 菜单按自己的价格扣款 → 扣款明确成功后 `apply(p)` → 按上述返回值处理。扣款失败或取消调用 `cancel(p)`。付款结果不明时不要调用 apply 或盲退款。脚本不得异步、延迟或重复付款，不应在 apply 前关闭或替换确认菜单；插件无法替菜单保证经济操作只执行一次。插件不提供经济脚本实现或价格来源。
 
-新实现和测试未包含原源码或第三方二进制。外部 MyPet、Vault、Purpur 及其他参考的适用版权与许可仍归各自权利人，本仓库不为第三方授予许可证。
+`getTargetName` 只读返回当前有效确认目标的展示名，无有效目标时返回空字符串。目标名称在 TrMenu 渲染打开期间也可只读展示；确认打开完成后才可准备。不要在 TrMenu 的预打开脚本中执行 prepare/付款。脚本回调仅针对当前可见会话同步调用，不能缓存 Player 后为旧会话延迟调用这些接口。`cancel` 清理该玩家当前选择。错实体线程的 prepare/apply 分别返回 false/REJECTED，cancel 无副作用，名称返回空字符串。
+
+每位玩家至多一个短期选择，60 秒后不可用，并在 1200 tick 超时回调中清理。取消、换菜单、退出及新的选择会废弃旧状态；合法的原生选择关闭与生存/创造默认背包的一 tick 衔接被单独允许。原生选择绑定 Bukkit 库存身份；TrMenu 确认通过 `Menu.open` 的 `Consumer<MenuSession>` 绑定真实 session id/menu/viewer，再核对本次 receptacle 与 `getViewingReceptacle`。默认 packet 模式无需 `InventoryOpenEvent`，static 模式也使用同一会话检查；不修改 TrMenu 全局设置。自然 packet 关闭走原生 receptacle `onClose`（未必触发 `MenuCloseEvent`）。本插件不读取、替换或包装该回调，关闭后通过原生 session/receptacle/viewing 身份检查拒绝名称展示、prepare 和 apply；未再次访问的选择由既有超时回收。TrMenu 3.12.5 的迟到旧 close 仍可能清掉新 session 或 viewing，因此新窗口也会失效；本插件不承诺该场景保持窗口可用，不自动重开，不通过延时推断关闭完成。完整旧 close 返回后重新选择可走正常原生流程。旧选择的延迟回调和完成清理不能删除后来建立的选择。prepare/apply 之间换宠物、原路线、权限或背包变化都会拒绝。进入 MyPet 前移除选择，防止同步事件重入重复执行。
+
+从 1.0.0 迁移时，由安装维护者移除旧 `reset-cost` 配置和 `nuomi-reset-confirm` 资源覆盖，创建 TrMenu `PetResetConfirm` 菜单及其付款脚本。不要再注册本插件旧 MyPet 确认菜单，也不要让两个插件接管 `nuomi-reset`。安装变更通过正常服务端生命周期完成。
+
+使用 Python 3 和支持 `--release 21` 的 JDK，以外部、未修改的依赖目录离线构建：
+
+```sh
+python3 build.py --deps-dir /path/to/dependencies
+```
+
+目录须包含上述精确 Purpur API、MyPet 4.0.4 及 Adventure、Guava、注解等 API 依赖。完整测试另需私有 Gson 依赖目录，传入 `--test-deps-dir <private-test-jars>`，该目录仅加入测试 classpath。构建执行公开接口、原生路线、应用边界、选择衔接、隐藏持久槽、安全门、真实 Paper 错线程判断及桥接重入回归，输出 `build/NomiPetExtras-1.1.0.jar` 和 SHA-256。第三方 JAR、测试类及私有输入不会打入产物。
+
+测试使用真实 MyPet/Paper 类型与故障适配器，真实 `BackpackImpl.applyState/getState` 覆盖全部持久槽；Material 空气判定由离线注册表适配。TrMenu 签名和调用顺序核对真实 3.12.5 JAR，可传入 `--trmenu-jar <TrMenu-3.12.5.jar>` 复核真实签名及字节码顺序，packet/static 行为由独立离线会话模型回归；没有运行游戏服务端或实际玩家联测。尚未验证运行服 TrMenu 的网络窗口与付款脚本、Folia 多玩家体验、数据库序列化和 MyPet 技能监听器在运行服上的完整效果。`SUCCESS` 只证明可观察的路线与等级经验条件，不能独立证明第三方监听器全部完成。Gson 只用于私有测试 classpath，第三方依赖不随产物分发。
+
+本项目未包含第三方源码或二进制。MyPet、Purpur、TrMenu 及其他依赖的版权与许可归各自权利人；本仓库不为第三方授予许可证。
+
+确认菜单使用 TrMenu 每次调用复制上下文的 JEXL，避开安装版 JS 共享玩家绑定；不在 Open/Close 事件付款或调用按玩家清理的 cancel，窗口关闭完全交给 TrMenu 原生生命周期；失效会话不能继续执行业务。插件仍需与确认菜单一起安装，不能仅卸载插件后留下按钮。未部署、未测真人。
+
+确认窗口关闭由 TrMenu 原生生命周期处理，失效会话拒绝执行业务。迟到的旧 close 不保证新窗口仍可用；完整旧 close 返回后，需重新选择。`PetResetConfirm` 菜单及付款脚本由部署者提供，实际价格须由部署者核实，不随本插件打包。离线测试与证据不代表真实玩家体验或实际扣费已验收。
